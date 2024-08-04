@@ -1,0 +1,76 @@
+name: CI
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - name: Check Runner Environment
+      shell: pwsh
+      run: |
+        Write-Host "Checking environment..."
+        Get-Process | Select-Object -First 5
+        Get-ChildItem Env: | Sort-Object Name
+    - name: Download ngrok
+      shell: pwsh
+      run: |
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+    - name: Extract ngrok
+      shell: pwsh
+      run: |
+        Expand-Archive ngrok.zip
+    - name: Auth ngrok
+      shell: pwsh
+      run: |
+        .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: Enable Terminal Services
+      shell: pwsh
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+    - name: Enable Firewall for Remote Desktop
+      shell: pwsh
+      run: |
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    - name: Configure RDP User Authentication
+      shell: pwsh
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+    - name: Set Runner Admin Password
+      shell: pwsh
+      run: |
+        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+    - name: Create ngrok Tunnel
+      shell: pwsh
+      run: |
+        .\ngrok\ngrok.exe tcp 3389
+    # Steps to install Python packages
+    - name: Install Python Packages
+      shell: pwsh
+      run: |
+        python -m pip install pygetwindow pyautogui
+    - name: Verify Python Package Installation
+      shell: pwsh
+      run: |
+        python -c "import pygetwindow; import pyautogui; print('pygetwindow and pyautogui installed successfully')"
+    # Steps to download files and save them on the desktop
+    - name: Download kata.txt
+      shell: pwsh
+      run: |
+        $DesktopPath = [Environment]::GetFolderPath('Desktop')
+        Invoke-WebRequest -Uri https://raw.githubusercontent.com/phishnetvip/shit/main/kata.txt -OutFile "$DesktopPath\kata.txt"
+    - name: Download main.py
+      shell: pwsh
+      run: |
+        $DesktopPath = [Environment]::GetFolderPath('Desktop')
+        Invoke-WebRequest -Uri https://raw.githubusercontent.com/phishnetvip/shit/main/main.py -OutFile "$DesktopPath\main.py"
+    - name: List Desktop Files
+      shell: pwsh
+      run: |
+        $DesktopPath = [Environment]::GetFolderPath('Desktop')
+        Get-ChildItem -Path $DesktopPath
